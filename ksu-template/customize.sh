@@ -1,29 +1,38 @@
 SKIPUNZIP=1
 
-# 解压模块文件到 MODPATH
+# 解压模块
 unzip -o "$ZIPFILE" -d "$MODPATH" >&2
 
-# 创建必要目录
+# 创建核心目录（配置/日志/二进制）
 mkdir -p "$MODPATH/bin"
 mkdir -p "$MODPATH/scripts"
 mkdir -p "$MODPATH/webroot"
+mkdir -p "$MODPATH/config"
 
-# 设置权限（核心）
-set_perm_recursive "$MODPATH/bin" 0 0 0755 0755
-set_perm_recursive "$MODPATH/scripts" 0 0 0755 0755
-set_perm "$MODPATH/service.sh" 0 0 0755
-set_perm "$MODPATH/uninstall.sh" 0 0 0755
+# 初始化配置文件（解决配置丢失）
+touch "$MODPATH/config/ech.conf"
+cat > "$MODPATH/config/ech.conf" << EOF
+server_addr=your-worker.workers.dev:443
+local_port=30000
+doh_server=dns.alidns.com/dns-query
+ech_domain=cloudflare-ech.com
+preferred_ip=
+auth_token=
+routing_mode=global
+enabled=false
+EOF
 
-# 初始化默认配置（KSU 内置配置系统）
-ksud module config set server_addr "your-worker.workers.dev:443"
-ksud module config set local_port "30000"
-ksud module config set doh_server "dns.alidns.com/dns-query"
-ksud module config set ech_domain "cloudflare-ech.com"
-ksud module config set preferred_ip ""
-ksud module config set auth_token ""
-ksud module config set routing_mode "global"
-ksud module config set enabled "false"
+# 创建日志文件并赋权（解决无日志）
+touch "$MODPATH/ech-workers.log"
+chmod 777 "$MODPATH/ech-workers.log"
+
+# 强制设置所有权限（解决启动无反应）
+chmod -R 755 "$MODPATH/bin"
+chmod -R 755 "$MODPATH/scripts"
+chmod 755 "$MODPATH/service.sh"
+chmod 755 "$MODPATH/uninstall.sh"
+chmod 666 "$MODPATH/config/ech.conf" # 配置文件可读写
 
 # 提示安装完成
-ui_print "ECH Workers KSU 模块安装完成！"
-ui_print "请在 KernelSU WebUI 中配置服务器信息后使用。"
+ui_print "✅ ECH Workers KSU 模块安装完成！"
+ui_print "👉 打开 KernelSU → 模块 → 点击本模块的 WebUI 配置使用"
