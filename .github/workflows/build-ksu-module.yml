@@ -1,4 +1,4 @@
-name: Build ECH Workers KSU Module (arm64, netproxy 规范)
+name: Build ECH Workers KSU Module (arm64, 无 go.mod)
 
 on:
   push:
@@ -17,18 +17,31 @@ jobs:
       - name: Checkout 源码
         uses: actions/checkout@v4
 
-      - name: 配置 Go 环境（静态编译关键）
+      - name: 配置 Go 环境（关闭模块模式）
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
           cache: false
 
-      - name: 静态编译 ech-workers（适配安卓）
+      - name: 手动下载依赖 + 静态编译（无 go.mod）
         run: |
-          # 强制静态编译，解决安卓依赖缺失问题
+          # 1. 关闭 Go 模块模式（关键！）
+          export GO111MODULE=off
+          
+          # 2. 手动创建 GOPATH 目录
+          mkdir -p $HOME/go/src/github.com/gorilla/
+          
+          # 3. 手动下载 websocket 依赖（不用 go mod）
+          git clone https://github.com/gorilla/websocket.git $HOME/go/src/github.com/gorilla/websocket
+          cd $HOME/go/src/github.com/gorilla/websocket
+          git checkout v1.5.1 # 固定版本，避免兼容问题
+          
+          # 4. 回到源码目录，静态编译（无模块依赖）
+          cd $GITHUB_WORKSPACE
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w -extldflags '-static'" -o ech-workers-arm64 ech-workers.go
-          # 验证静态编译（可选，用于排查）
-          file ech-workers-arm64 | grep "statically linked" || echo "⚠️ 编译非静态，可能运行失败！"
+          
+          # 验证编译结果
+          file ech-workers-arm64 | grep "statically linked" || echo "⚠️ 编译非静态，但已尽力！"
 
       - name: 按 netproxy 规范组织模块文件
         run: |
@@ -48,19 +61,19 @@ jobs:
           cp ksu-template/webroot/index.html ksu-build/webroot/
           cp ksu-template/webroot/script.js ksu-build/webroot/
           
-          # 初始化配置/日志/PID文件（提前赋权）
+          # 初始化配置/日志/PID文件
           touch ksu-build/etc/config.txt
           touch ksu-build/run/ech-workers.pid
           touch ksu-build/run/ech-workers.log
           
-          # 设置标准权限（和 netproxy 一致）
+          # 设置权限
           chmod -R 755 ksu-build/bin
           chmod -R 755 ksu-build/scripts
           chmod 644 ksu-build/etc/config.txt
           chmod 644 ksu-build/run/*
           chmod 755 ksu-build/*.sh
           
-          # 打包成 KSU 可刷入的 ZIP
+          # 打包成 ZIP
           cd ksu-build
           zip -r ../ech-workers-ksu-arm64.zip ./*
           cd ..
