@@ -3,7 +3,7 @@ name: Build ECH Workers KSU Module (arm64 only)
 on:
   push:
     tags:
-      - 'v1.4'
+      - 'v*'
   workflow_dispatch:
 
 jobs:
