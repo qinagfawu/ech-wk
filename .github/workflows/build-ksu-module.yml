@@ -26,11 +26,8 @@ jobs:
 
       - name: 交叉编译 ech-workers 二进制（按架构）
         run: |
-          # 安装 upx 压缩二进制体积
-          sudo apt update && sudo apt install -y upx
-          
-          # 下载依赖并补全 go.sum（核心修复）
-          go mod download
+          # 自动补全依赖和 go.sum 校验和（核心修复校验和不匹配问题）
+          go mod tidy
           
           # 根据架构编译
           case ${{ matrix.arch }} in
@@ -48,8 +45,8 @@ jobs:
               ;;
           esac
           
-          # 压缩二进制
-          upx --best ech-workers-${{ matrix.arch }} || echo "UPX 压缩失败，跳过"
+          # 可选：压缩二进制体积（如需压缩保留，不需要则删除下面这行）
+          # sudo apt install -y upx && upx --best ech-workers-${{ matrix.arch }} || echo "UPX 压缩失败，跳过"
 
       - name: 准备 KSU 模块打包目录
         run: |
