@@ -3,16 +3,16 @@ name: Build ECH Workers KSU Module (arm64 only)
 on:
   push:
     tags:
-      - 'v*'  # 打标签触发
-  workflow_dispatch:  # 手动触发
+      - 'v*'  # 保留 Tag 触发，也支持手动触发
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        arch: [arm64]  # 仅构建arm64架构
+        arch: [arm64] # 仅构建 arm64
 
     steps:
       - name: Checkout 源码
@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-          cache: false  # 关闭缓存避免依赖冲突
+          cache: false # 关闭缓存，避免旧依赖干扰
 
       - name: 清理旧依赖并重新初始化
         run: |
@@ -37,12 +37,10 @@ jobs:
 
       - name: 打包 KSU 模块
         run: |
-          # 创建模块目录结构
           mkdir -p ksu-build/bin
           mkdir -p ksu-build/scripts
           mkdir -p ksu-build/webroot
           
-          # 复制编译产物和模板文件
           cp ech-workers-arm64 ksu-build/bin/ech-workers
           cp ksu-template/module.prop ksu-build/
           cp ksu-template/customize.sh ksu-build/
@@ -51,21 +49,21 @@ jobs:
           cp ksu-template/scripts/start.sh ksu-build/scripts/
           cp ksu-template/webroot/* ksu-build/webroot/
           
-          # 设置可执行权限
           chmod +x ksu-build/bin/ech-workers
           chmod +x ksu-build/scripts/*
           chmod +x ksu-build/*.sh
           
-          # 打包成ZIP（KSU可刷入格式）
           cd ksu-build
           zip -r ../ech-workers-ksu-arm64.zip ./*
           cd ..
 
-      - name: 上传到 GitHub Releases
+      - name: 上传到 GitHub Releases (强制上传)
         uses: softprops/action-gh-release@v2
-        # 删掉了if判断，强制上传文件到Releases
+        # 关键修复：去掉 if 条件，强制上传，不管是不是 Tag
         with:
-          files: ech-workers-ksu-arm64.zip
+          tag_name: ${{ github.ref_name }} # 使用当前构建的标签名
+          files: |
+            ech-workers-ksu-arm64.zip
           draft: false
           prerelease: false
         env:
