@@ -29,6 +29,9 @@ jobs:
           # 安装 upx 压缩二进制体积
           sudo apt update && sudo apt install -y upx
           
+          # 下载依赖并补全 go.sum（核心修复）
+          go mod download
+          
           # 根据架构编译
           case ${{ matrix.arch }} in
             arm64)
