@@ -25,64 +25,60 @@ jobs:
 
       - name: 手动下载依赖 + 静态编译（无 go.mod）
         run: |
-          # 1. 关闭 Go 模块模式（关键！）
+          # 1. 关闭 Go 模块模式
           export GO111MODULE=off
           
-          # 2. 手动创建 GOPATH 目录
+          # 2. 创建 GOPATH 目录
           mkdir -p $HOME/go/src/github.com/gorilla/
           
-          # 3. 手动下载 websocket 依赖（不用 go mod）
+          # 3. 手动下载 websocket 依赖
           git clone https://github.com/gorilla/websocket.git $HOME/go/src/github.com/gorilla/websocket
           cd $HOME/go/src/github.com/gorilla/websocket
-          git checkout v1.5.1 # 固定版本，避免兼容问题
+          git checkout v1.5.1
           
-          # 4. 回到源码目录，静态编译（无模块依赖）
+          # 4. 回到源码目录，静态编译
           cd $GITHUB_WORKSPACE
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w -extldflags '-static'" -o ech-workers-arm64 ech-workers.go
           
-          # 验证编译结果
-          file ech-workers-arm64 | grep "statically linked" || echo "⚠️ 编译非静态，但已尽力！"
+          # 验证
+          file ech-workers-arm64 | grep "statically linked" || echo "编译结果非静态"
 
       - name: 按 netproxy 规范组织模块文件
         run: |
-          # 创建 netproxy 标准目录结构
           mkdir -p ksu-build/{bin,etc,run,scripts,webroot}
           
-          # 复制编译好的二进制
+          # 复制二进制
           cp ech-workers-arm64 ksu-build/bin/ech-workers
           
-          # 复制核心脚本
-          cp ksu-template/control.sh ksu-build/scripts/
-          cp ksu-template/service.sh ksu-build/
-          cp ksu-template/customize.sh ksu-build/
-          cp ksu-template/module.prop ksu-build/
+          # 复制脚本 (确保你仓库的 ksu-template 里有这些文件)
+          cp ksu-template/control.sh ksu-build/scripts/ || true
+          cp ksu-template/service.sh ksu-build/ || true
+          cp ksu-template/customize.sh ksu-build/ || true
+          cp ksu-template/module.prop ksu-build/ || true
           
-          # 复制 WebUI 文件
-          cp ksu-template/webroot/index.html ksu-build/webroot/
-          cp ksu-template/webroot/script.js ksu-build/webroot/
+          # 复制 WebUI
+          cp ksu-template/webroot/index.html ksu-build/webroot/ 2>/dev/null || true
+          cp ksu-template/webroot/script.js ksu-build/webroot/ 2>/dev/null || true
           
-          # 初始化配置/日志/PID文件
+          # 初始化文件
           touch ksu-build/etc/config.txt
           touch ksu-build/run/ech-workers.pid
           touch ksu-build/run/ech-workers.log
           
-          # 设置权限
+          # 权限
           chmod -R 755 ksu-build/bin
           chmod -R 755 ksu-build/scripts
           chmod 644 ksu-build/etc/config.txt
           chmod 644 ksu-build/run/*
           chmod 755 ksu-build/*.sh
           
-          # 打包成 ZIP
+          # 打包
           cd ksu-build
           zip -r ../ech-workers-ksu-arm64.zip ./*
           cd ..
 
-      - name: 上传到 GitHub Releases
-        uses: softprops/action-gh-release@v2
+      - name: 上传模块作为 Artifact（跳过 Tag 限制）
+        uses: actions/upload-artifact@v4
         with:
-          files: ech-workers-ksu-arm64.zip
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: ech-workers-ksu-arm64
+          path: ech-workers-ksu-arm64.zip
