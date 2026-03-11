@@ -1,7 +1,8 @@
 id=ech-workers-ksu
 name=ECH Workers (KernelSU)
-version=v1.4
-versionCode=14
-author=qiangfawu & 你的用户名
-description=ECH Workers 代理模块，支持 KernelSU WebUI 配置、开机自启、多架构兼容
-webuiIcon=
+version=1.0
+versionCode=1
+author=Your Name
+description=ECH Workers proxy module for KernelSU (arm64)
+updateUrl=
+supportUrl=
