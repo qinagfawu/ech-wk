@@ -1,69 +1,74 @@
-name: Build ECH Workers KSU Module (arm64 only)
+name: Build ECH Workers KSU Module (arm64, netproxy 规范)
 
 on:
   push:
-    tags:
-      - 'v*'  # 保留 Tag 触发，也支持手动触发
-  workflow_dispatch:  # 允许手动触发
+    tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        arch: [arm64] # 仅构建 arm64
+        arch: [arm64]
 
     steps:
       - name: Checkout 源码
         uses: actions/checkout@v4
 
-      - name: 配置 Go 环境
+      - name: 配置 Go 环境（静态编译关键）
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-          cache: false # 关闭缓存，避免旧依赖干扰
+          cache: false
 
-      - name: 清理旧依赖并重新初始化
+      - name: 静态编译 ech-workers（适配安卓）
         run: |
-          rm -f go.sum go.mod
-          go mod init github.com/byJoey/ech-wk
-          go get github.com/gorilla/websocket@v1.5.1
-          go mod tidy
+          # 强制静态编译，解决安卓依赖缺失问题
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w -extldflags '-static'" -o ech-workers-arm64 ech-workers.go
+          # 验证静态编译（可选，用于排查）
+          file ech-workers-arm64 | grep "statically linked" || echo "⚠️ 编译非静态，可能运行失败！"
 
-      - name: 编译 arm64 版本
+      - name: 按 netproxy 规范组织模块文件
         run: |
-          GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o ech-workers-arm64 ech-workers.go
-
-      - name: 打包 KSU 模块
-        run: |
-          mkdir -p ksu-build/bin
-          mkdir -p ksu-build/scripts
-          mkdir -p ksu-build/webroot
+          # 创建 netproxy 标准目录结构
+          mkdir -p ksu-build/{bin,etc,run,scripts,webroot}
           
+          # 复制编译好的二进制
           cp ech-workers-arm64 ksu-build/bin/ech-workers
-          cp ksu-template/module.prop ksu-build/
-          cp ksu-template/customize.sh ksu-build/
+          
+          # 复制核心脚本
+          cp ksu-template/control.sh ksu-build/scripts/
           cp ksu-template/service.sh ksu-build/
-          cp ksu-template/uninstall.sh ksu-build/
-          cp ksu-template/scripts/start.sh ksu-build/scripts/
-          cp ksu-template/webroot/* ksu-build/webroot/
+          cp ksu-template/customize.sh ksu-build/
+          cp ksu-template/module.prop ksu-build/
           
-          chmod +x ksu-build/bin/ech-workers
-          chmod +x ksu-build/scripts/*
-          chmod +x ksu-build/*.sh
+          # 复制 WebUI 文件
+          cp ksu-template/webroot/index.html ksu-build/webroot/
+          cp ksu-template/webroot/script.js ksu-build/webroot/
           
+          # 初始化配置/日志/PID文件（提前赋权）
+          touch ksu-build/etc/config.txt
+          touch ksu-build/run/ech-workers.pid
+          touch ksu-build/run/ech-workers.log
+          
+          # 设置标准权限（和 netproxy 一致）
+          chmod -R 755 ksu-build/bin
+          chmod -R 755 ksu-build/scripts
+          chmod 644 ksu-build/etc/config.txt
+          chmod 644 ksu-build/run/*
+          chmod 755 ksu-build/*.sh
+          
+          # 打包成 KSU 可刷入的 ZIP
           cd ksu-build
           zip -r ../ech-workers-ksu-arm64.zip ./*
           cd ..
 
-      - name: 上传到 GitHub Releases (强制上传)
+      - name: 上传到 GitHub Releases
         uses: softprops/action-gh-release@v2
-        # 关键修复：去掉 if 条件，强制上传，不管是不是 Tag
         with:
-          tag_name: ${{ github.ref_name }} # 使用当前构建的标签名
-          files: |
-            ech-workers-ksu-arm64.zip
+          files: ech-workers-ksu-arm64.zip
           draft: false
           prerelease: false
         env:
